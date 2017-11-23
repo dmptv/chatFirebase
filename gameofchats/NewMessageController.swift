@@ -1,10 +1,4 @@
-//
-//  NewMessageController.swift
-//  gameofchats
-//
-//  Created by Brian Voong on 6/29/16.
-//  Copyright © 2016 letsbuildthatapp. All rights reserved.
-//
+
 
 import UIKit
 import Firebase
@@ -12,8 +6,8 @@ import Firebase
 class NewMessageController: UITableViewController {
     
     let cellId = "cellId"
-    
     var users = [User]()
+    weak var messagesController: MessagesController?
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -26,22 +20,26 @@ class NewMessageController: UITableViewController {
     }
     
     func fetchUser() {
+        // получаем всех юзеров
         FIRDatabase.database().reference().child("users").observe(.childAdded, with: { (snapshot) in
             
             if let dictionary = snapshot.value as? [String: AnyObject] {
+                
                 let user = User(dictionary: dictionary)
                 user.id = snapshot.key
                 self.users.append(user)
                 
                 //this will crash because of background thread, so lets use dispatch_async to fix
-                DispatchQueue.main.async(execute: { 
+                DispatchQueue.main.async(execute: {
                     self.tableView.reloadData()
                 })
                 
 //                user.name = dictionary["name"]
             }
             
-            }, withCancel: nil)
+        }, withCancel: nil)
+        
+       
     }
     
     func handleCancel() {
@@ -70,7 +68,6 @@ class NewMessageController: UITableViewController {
         return 72
     }
     
-    var messagesController: MessagesController?
     
     override func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
         dismiss(animated: true) { 

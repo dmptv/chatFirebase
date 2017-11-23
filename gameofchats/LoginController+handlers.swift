@@ -1,51 +1,64 @@
-//
-//  LoginController+handlers.swift
-//  gameofchats
-//
-//  Created by Brian Voong on 7/4/16.
-//  Copyright © 2016 letsbuildthatapp. All rights reserved.
-//
+
 
 import UIKit
 import Firebase
 
 extension LoginController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     
+    //MARK: - Регистрация
+    
     func handleRegister() {
-        guard let email = emailTextField.text, let password = passwordTextField.text, let name = nameTextField.text else {
+        guard let email = emailTextField.text,
+            let password = passwordTextField.text,
+            let name = nameTextField.text else {
             print("Form is not valid")
             return
         }
         
-        FIRAuth.auth()?.createUser(withEmail: email, password: password, completion: { (user: FIRUser?, error) in
-            
+        // создаем юзера
+        FIRAuth.auth()?.createUser(withEmail: email,
+                                   password: password,
+                                   completion: { (user: FIRUser?, error) in
             if error != nil {
                 print(error!)
                 return
             }
             
+              // Successfully authenticated user
+            
             guard let uid = user?.uid else {
                 return
             }
+
+            // Загружаем фото юзера в хранилище
             
-            //successfully authenticated user
+            // взяли идентифкатор
             let imageName = UUID().uuidString
+            
+            // взяли нод под этим идентикатором + .jpg
             let storageRef = FIRStorage.storage().reference().child("profile_images").child("\(imageName).jpg")
             
-            if let profileImage = self.profileImageView.image, let uploadData = UIImageJPEGRepresentation(profileImage, 0.1) {
+            // ужали размер картинки
+            if let profileImage = self.profileImageView.image,
+                let uploadData = UIImageJPEGRepresentation(profileImage, 0.1) {
             
-//            if let uploadData = UIImagePNGRepresentation(self.profileImageView.image!) {
-            
-                storageRef.put(uploadData, metadata: nil, completion: { (metadata, error) in
-                    
+                 //  if let uploadData = UIImagePNGRepresentation(self.profileImageView.image!) {
+                
+                // загрузили в хранилище
+                storageRef.put(uploadData, metadata: nil,
+                               completion: { (metadata, error) in
                     if error != nil {
                         print(error!)
                         return
                     }
                     
+                    // нам вернулась ссылка на картинку
                     if let profileImageUrl = metadata?.downloadURL()?.absoluteString {
                         
-                        let values = ["name": name, "email": email, "profileImageUrl": profileImageUrl]
+                        // собрали свойства юзера в словарь
+                        let values = ["name": name,
+                                      "email": email,
+                                      "profileImageUrl": profileImageUrl]
                         
                         self.registerUserIntoDatabaseWithUID(uid, values: values as [String : AnyObject])
                     }
@@ -54,43 +67,55 @@ extension LoginController: UIImagePickerControllerDelegate, UINavigationControll
         })
     }
     
-    fileprivate func registerUserIntoDatabaseWithUID(_ uid: String, values: [String: AnyObject]) {
+    func registerUserIntoDatabaseWithUID(_ uid: String,
+                                         values: [String: AnyObject]) {
+        
+        // сохраняем данные юзера в бд
         let ref = FIRDatabase.database().reference()
+        
+        // взяли реф на нод юзера
         let usersReference = ref.child("users").child(uid)
         
-        usersReference.updateChildValues(values, withCompletionBlock: { (err, ref) in
-            
+        // обновили свойства юзера
+        usersReference.updateChildValues(values,
+                                         withCompletionBlock: { (err, ref) in
             if err != nil {
                 print(err!)
                 return
             }
             
-//            self.messagesController?.fetchUserAndSetupNavBarTitle()
-//            self.messagesController?.navigationItem.title = values["name"] as? String
+            // self.messagesController?.fetchUserAndSetupNavBarTitle()
+            // self.messagesController?.navigationItem.title = values["name"] as? String
+            
+            // собрали юзера из пришедших свойств
             let user = User(dictionary: values)
+            
+            // передали юзера в основной контролер
             self.messagesController?.setupNavBarWithUser(user)
             
+            // убрали логин контролер
             self.dismiss(animated: true, completion: nil)
         })
     }
     
+    
+    //MARK: - UIImagePickerControllerDelegate
+    
     func handleSelectProfileImageView() {
         let picker = UIImagePickerController()
-        
         picker.delegate = self
         picker.allowsEditing = true
-        
         present(picker, animated: true, completion: nil)
     }
     
-    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [String : Any]) {
+    func imagePickerController(_ picker: UIImagePickerController,
+                               didFinishPickingMediaWithInfo info: [String : Any]) {
         
         var selectedImageFromPicker: UIImage?
         
         if let editedImage = info["UIImagePickerControllerEditedImage"] as? UIImage {
             selectedImageFromPicker = editedImage
         } else if let originalImage = info["UIImagePickerControllerOriginalImage"] as? UIImage {
-            
             selectedImageFromPicker = originalImage
         }
         
@@ -99,7 +124,6 @@ extension LoginController: UIImagePickerControllerDelegate, UINavigationControll
         }
         
         dismiss(animated: true, completion: nil)
-        
     }
     
     func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
@@ -108,3 +132,12 @@ extension LoginController: UIImagePickerControllerDelegate, UINavigationControll
     }
     
 }
+
+
+
+
+
+
+
+
+

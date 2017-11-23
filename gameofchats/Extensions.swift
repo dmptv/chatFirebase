@@ -1,10 +1,4 @@
-//
-//  Extensions.swift
-//  gameofchats
-//
-//  Created by Brian Voong on 7/5/16.
-//  Copyright © 2016 letsbuildthatapp. All rights reserved.
-//
+
 
 import UIKit
 
@@ -14,6 +8,7 @@ extension UIImageView {
     
     func loadImageUsingCacheWithUrlString(_ urlString: String) {
         
+         //  чтобы не было флэша
         self.image = nil
         
         //check cache for image first
@@ -33,10 +28,8 @@ extension UIImageView {
             }
             
             DispatchQueue.main.async(execute: {
-                
                 if let downloadedImage = UIImage(data: data!) {
                     imageCache.setObject(downloadedImage, forKey: urlString as AnyObject)
-                    
                     self.image = downloadedImage
                 }
             })

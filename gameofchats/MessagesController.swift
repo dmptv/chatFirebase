@@ -1,13 +1,9 @@
-//
-//  ViewController.swift
-//  gameofchats
-//
-//  Created by Brian Voong on 6/24/16.
-//  Copyright © 2016 letsbuildthatapp. All rights reserved.
-//
+
+
 
 import UIKit
 import Firebase
+
 // FIXME: comparison operators with optionals were removed from the Swift Standard Libary.
 // Consider refactoring the code to use the non-optional operators.
 fileprivate func < <T : Comparable>(lhs: T?, rhs: T?) -> Bool {
@@ -45,73 +41,50 @@ class MessagesController: UITableViewController {
         let image = UIImage(named: "new_message_icon")
         navigationItem.rightBarButtonItem = UIBarButtonItem(image: image, style: .plain, target: self, action: #selector(handleNewMessage))
         
+        // проверяем при каждой закгрузке
         checkIfUserIsLoggedIn()
         
         tableView.register(UserCell.self, forCellReuseIdentifier: cellId)
         
 //        observeMessages()
+        
+        tableView.allowsSelectionDuringEditing = true
     }
     
-    var messages = [Message]()
-    var messagesDictionary = [String: Message]()
+    //MARK: - Table View
     
-    func observeUserMessages() {
+    override func tableView(_ tableView: UITableView, canEditRowAt indexPath: IndexPath) -> Bool {
+        return true
+    }
+    
+    
+    override func tableView(_ tableView: UITableView, commit editingStyle: UITableViewCellEditingStyle, forRowAt indexPath: IndexPath) {
+        
         guard let uid = FIRAuth.auth()?.currentUser?.uid else {
             return
         }
         
-        let ref = FIRDatabase.database().reference().child("user-messages").child(uid)
-        ref.observe(.childAdded, with: { (snapshot) in
-            
-            let userId = snapshot.key
-            FIRDatabase.database().reference().child("user-messages").child(uid).child(userId).observe(.childAdded, with: { (snapshot) in
-                
-                let messageId = snapshot.key
-                self.fetchMessageWithMessageId(messageId)
-                
-                }, withCancel: nil)
-            
-            }, withCancel: nil)
-    }                            
-    
-    fileprivate func fetchMessageWithMessageId(_ messageId: String) {
-        let messagesReference = FIRDatabase.database().reference().child("messages").child(messageId)
+        let message = self.messages[indexPath.row]
         
-        messagesReference.observeSingleEvent(of: .value, with: { (snapshot) in
-            
-            if let dictionary = snapshot.value as? [String: AnyObject] {
-                let message = Message(dictionary: dictionary)
+        if let chatPartnerId = message.chatPartnerId() {
+            FIRDatabase.database().reference().child("user-messages").child(uid).child(chatPartnerId).removeValue(completionBlock: { (error, ref) in
                 
-                if let chatPartnerId = message.chatPartnerId() {
-                    self.messagesDictionary[chatPartnerId] = message
+                if error != nil {
+                    print("Failed to delete message:", error!)
+                    return
                 }
                 
+                self.messagesDictionary.removeValue(forKey: chatPartnerId)
                 self.attemptReloadOfTable()
-            }
-            
-            }, withCancel: nil)
+                
+                //                //this is one way of updating the table, but its actually not that safe..
+                //                self.messages.removeAtIndex(indexPath.row)
+                //                self.tableView.deleteRowsAtIndexPaths([indexPath], withRowAnimation: .Automatic)
+                
+            })
+        }
     }
     
-    fileprivate func attemptReloadOfTable() {
-        self.timer?.invalidate()
-        
-        self.timer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(self.handleReloadTable), userInfo: nil, repeats: false)
-    }
-    
-    var timer: Timer?
-    
-    func handleReloadTable() {
-        self.messages = Array(self.messagesDictionary.values)
-        self.messages.sort(by: { (message1, message2) -> Bool in
-            
-            return message1.timestamp?.int32Value > message2.timestamp?.int32Value
-        })
-        
-        //this will crash because of background thread, so lets call this on dispatch_async main thread
-        DispatchQueue.main.async(execute: {
-            self.tableView.reloadData()
-        })
-    }
     
     override func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
         return messages.count
@@ -150,14 +123,66 @@ class MessagesController: UITableViewController {
             }, withCancel: nil)
     }
     
-    func handleNewMessage() {
-        let newMessageController = NewMessageController()
-        newMessageController.messagesController = self
-        let navController = UINavigationController(rootViewController: newMessageController)
-        present(navController, animated: true, completion: nil)
+    var messages = [Message]()
+    var messagesDictionary = [String: Message]()
+    
+     
+    fileprivate func observeUserMessages() {
+        guard let uid = FIRAuth.auth()?.currentUser?.uid else {
+            return
+        }
+        
+        // "observe  childAdded "- every time new child message comes into the system  we are notified of this message
+        let ref = FIRDatabase.database().reference().child("user-messages").child(uid)
+        ref.observe(.childAdded, with: { (snapshot) in
+            
+            let userId = snapshot.key
+            FIRDatabase.database().reference().child("user-messages").child(uid).child(userId).observe(.childAdded, with: { (snapshot) in
+                
+                let messageId = snapshot.key
+                self.fetchMessageWithMessageId(messageId)
+                
+            }, withCancel: nil)
+            
+        }, withCancel: nil)
+        
+        ref.observe(.childRemoved, with: { (snapshot) in
+            print(snapshot.key)
+            print(self.messagesDictionary)
+            
+            self.messagesDictionary.removeValue(forKey: snapshot.key)
+            self.attemptReloadOfTable()
+            
+        }, withCancel: nil)
     }
     
-    func checkIfUserIsLoggedIn() {
+    fileprivate func fetchMessageWithMessageId(_ messageId: String) {
+        let messagesReference = FIRDatabase.database().reference().child("messages").child(messageId)
+        
+        messagesReference.observeSingleEvent(of: .value, with: { (snapshot) in
+            
+            if let dictionary = snapshot.value as? [String: AnyObject] {
+                let message = Message(dictionary: dictionary)
+                
+                if let chatPartnerId = message.chatPartnerId() {
+                    self.messagesDictionary[chatPartnerId] = message
+                }
+                
+                self.attemptReloadOfTable()
+            }
+            
+        }, withCancel: nil)
+    }
+    
+    var timer: Timer?
+    
+    fileprivate func attemptReloadOfTable() {
+        self.timer?.invalidate()
+        
+        self.timer = Timer.scheduledTimer(timeInterval: 0.1, target: self, selector: #selector(self.handleReloadTable), userInfo: nil, repeats: false)
+    }
+    
+    fileprivate func checkIfUserIsLoggedIn() {
         if FIRAuth.auth()?.currentUser?.uid == nil {
             perform(#selector(handleLogout), with: nil, afterDelay: 0)
         } else {
@@ -165,12 +190,15 @@ class MessagesController: UITableViewController {
         }
     }
     
+    // возьмем все сообщения юзера с другими пользователями , сгруппируем для каждого собеседнника отдельно  
     func fetchUserAndSetupNavBarTitle() {
+        
         guard let uid = FIRAuth.auth()?.currentUser?.uid else {
             //for some reason uid = nil
             return
         }
         
+        // берем юзера из дб
         FIRDatabase.database().reference().child("users").child(uid).observeSingleEvent(of: .value, with: { (snapshot) in
             
             if let dictionary = snapshot.value as? [String: AnyObject] {
@@ -178,6 +206,8 @@ class MessagesController: UITableViewController {
                 
                 let user = User(dictionary: dictionary)
                 user.setValuesForKeys(dictionary)
+                
+                // устанавливаем nav bar title и картинку по середине нав бара
                 self.setupNavBarWithUser(user)
             }
             
@@ -242,8 +272,29 @@ class MessagesController: UITableViewController {
         navigationController?.pushViewController(chatLogController, animated: true)
     }
     
-    func handleLogout() {
+    
+    //MARK:- Handles
+    
+    @objc fileprivate func handleReloadTable() {
+        self.messages = Array(self.messagesDictionary.values)
+        self.messages.sort(by: { (message1, message2) -> Bool in
+            return message1.timestamp?.int32Value > message2.timestamp?.int32Value
+        })
         
+        DispatchQueue.main.async(execute: {
+            self.tableView.reloadData()
+        })
+    }
+    
+    @objc fileprivate func handleNewMessage() {
+        let newMessageController = NewMessageController()
+        // передали в контролер селф
+        newMessageController.messagesController = self
+        let navController = UINavigationController(rootViewController: newMessageController)
+        present(navController, animated: true, completion: nil)
+    }
+    
+    @objc fileprivate func handleLogout() {
         do {
             try FIRAuth.auth()?.signOut()
         } catch let logoutError {
@@ -251,7 +302,10 @@ class MessagesController: UITableViewController {
         }
         
         let loginController = LoginController()
+        
+        // передали в контролер селф
         loginController.messagesController = self
+        
         present(loginController, animated: true, completion: nil)
     }
 
